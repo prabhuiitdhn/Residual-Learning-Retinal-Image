@@ -1,0 +1,35 @@
+import os
+import torch
+from model import ResidualDenoiser
+from dataset import PairedImageDataset
+from trainer import Trainer
+
+# Define explicit paths for each split
+train_original_folder = r"D:\Hello\src\dataset\training\original"
+train_noisy_folder    = r"D:\Hello\src\dataset\training\noisy"
+val_original_folder   = r"D:\Hello\src\dataset\validation\original"
+val_noisy_folder      = r"D:\Hello\src\dataset\validation\noisy"
+
+checkpoint_path = r"D:\Hello\src\checkpoints"
+
+# Dataset setup
+img_size = (180, 180)
+train_dataset = PairedImageDataset(train_original_folder, train_noisy_folder, img_size=img_size)
+val_dataset   = PairedImageDataset(val_original_folder, val_noisy_folder, img_size=img_size)
+
+# Model setup
+model = ResidualDenoiser()
+
+# Trainer setup
+trainer = Trainer(
+    model=model,
+    train_dataset=train_dataset,
+    val_dataset=val_dataset,
+    batch_size=32,
+    lr=1e-3,
+    epochs=5,
+    save_dir=checkpoint_path
+)
+
+if __name__ == "__main__":
+    trainer.train()
