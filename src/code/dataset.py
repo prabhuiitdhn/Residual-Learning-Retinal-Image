@@ -34,4 +34,4 @@ class PairedImageDataset(Dataset):
         noisy = cv2.cvtColor(noisy, cv2.COLOR_BGR2RGB)
         orig = torch.tensor(orig.transpose(2,0,1), dtype=torch.float32) / 255.0
         noisy = torch.tensor(noisy.transpose(2,0,1), dtype=torch.float32) / 255.0
-        return orig, noisy
+        return noisy, orig

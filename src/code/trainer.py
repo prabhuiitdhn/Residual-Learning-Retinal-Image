@@ -87,18 +87,18 @@ class Trainer:
         for epoch in range(self.epochs):
             self.model.train()
             epoch_loss, epoch_acc = 0, 0
-            for batch_idx, (Xb, yb) in enumerate(self.train_loader):
-                Xb = Xb.to(self.device)
-                yb = yb.to(self.device)
+            for batch_idx, (noisy, original) in enumerate(self.train_loader):
+                noisy = noisy.to(self.device)
+                original = original.to(self.device)
                 self.optimizer.zero_grad()
                 if batch_idx == 0:
-                    self.extract_and_save_all_feature_maps(Xb, epoch)
-                out = self.model(Xb)
-                loss = self.criterion(out, yb - Xb)
+                    self.extract_and_save_all_feature_maps(noisy, epoch)
+                out = self.model(noisy)
+                loss = self.criterion(out, noisy - original)
                 loss.backward()
                 self.optimizer.step()
-                epoch_loss += loss.item() * Xb.size(0)
-                epoch_acc += self.accuracy_fn(out, yb - Xb) * Xb.size(0)
+                epoch_loss += loss.item() * noisy.size(0)
+                epoch_acc += self.accuracy_fn(out, noisy - original) * noisy.size(0)
             epoch_loss /= len(self.train_loader.dataset)
             epoch_acc /= len(self.train_loader.dataset)
             self.train_losses.append(epoch_loss)
@@ -108,12 +108,12 @@ class Trainer:
             self.model.eval()
             with torch.no_grad():
                 val_loss, val_acc = 0, 0
-                for Xv, yv in self.val_loader:
-                    Xv = Xv.to(self.device)
-                    yv = yv.to(self.device)
-                    outv = self.model(Xv)
-                    val_loss += self.criterion(outv, yv - Xv).item() * Xv.size(0)
-                    val_acc += self.accuracy_fn(outv, yv - Xv) * Xv.size(0)
+                for noisy, original in self.val_loader:
+                    noisy = noisy.to(self.device)
+                    original = original.to(self.device)
+                    outv = self.model(noisy)
+                    val_loss += self.criterion(outv, noisy - original).item() * noisy.size(0)
+                    val_acc += self.accuracy_fn(outv, noisy - original) * noisy.size(0)
                 val_loss /= len(self.val_loader.dataset)
                 val_acc /= len(self.val_loader.dataset)
                 self.val_losses.append(val_loss)

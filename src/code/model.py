@@ -3,9 +3,9 @@ import torch.nn as nn
 
 class ResidualDenoiser(nn.Module):
     """
-    Encoder-Decoder architecture for residual image prediction.
-    Input: (batch_size, 3, H, W) - original image
-    Output: (batch_size, 3, H, W) - residual image (noisy - original)
+    Encoder-Decoder architecture for image denoising.
+    Input: (batch_size, 3, H, W) - noisy image
+    Output: (batch_size, 3, H, W) - denoised image (should match original)
     """
     def __init__(self, in_channels=3, out_channels=3, features=[32, 64, 128]):
         super(ResidualDenoiser, self).__init__()
@@ -36,21 +36,15 @@ class ResidualDenoiser(nn.Module):
         )
 
     def forward(self, x):
-        # Encoder
+        # x: noisy image
         enc1 = self.encoder1(x)
         enc2 = self.encoder2(self.pool1(enc1))
-
-        # Bottleneck
         bottleneck = self.bottleneck(self.pool2(enc2))
-
-        # Decoder
         dec1 = self.upconv1(bottleneck)
         dec1 = torch.cat((dec1, enc2), dim=1)
         dec1 = self.decoder1(dec1)
         dec2 = self.upconv2(dec1)
         dec2 = torch.cat((dec2, enc1), dim=1)
         dec2 = self.decoder2(dec2)
-
-        # Output
         out = self.final_conv(dec2)
-        return out
+        return out  # denoised image

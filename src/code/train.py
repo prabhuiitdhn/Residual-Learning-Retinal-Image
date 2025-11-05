@@ -5,12 +5,12 @@ from dataset import PairedImageDataset
 from trainer import Trainer
 
 # Define explicit paths for each split
-train_original_folder = r"D:\Hello\src\dataset\training\original"
-train_noisy_folder    = r"D:\Hello\src\dataset\training\noisy"
-val_original_folder   = r"D:\Hello\src\dataset\validation\original"
-val_noisy_folder      = r"D:\Hello\src\dataset\validation\noisy"
+train_original_folder = r"D:\Hello\Residual_learning_Retina_Image\src\dataset\training\original"
+train_noisy_folder    = r"D:\Hello\Residual_learning_Retina_Image\src\dataset\training\noisy"
+val_original_folder   = r"D:\Hello\Residual_learning_Retina_Image\src\dataset\validation\original"
+val_noisy_folder      = r"D:\Hello\Residual_learning_Retina_Image\src\dataset\validation\noisy"
 
-checkpoint_path = r"D:\Hello\src\checkpoints"
+checkpoint_path = r"D:\Hello\Residual_learning_Retina_Image\src\checkpoints"
 
 # Dataset setup
 img_size = (180, 180)
