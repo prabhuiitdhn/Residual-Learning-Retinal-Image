@@ -29,6 +29,25 @@ class ResidualDenoiser(nn.Module):
         self.final_conv = nn.Conv2d(features[0], out_channels, kernel_size=1)
         self.output_activation = nn.Sigmoid()
 
+        # For feature extraction (foreground only)
+        self._last_feature_map = None
+
+    def get_last_feature_map(self, mask=None):
+        """
+        Returns the last bottleneck feature map (optionally masked for foreground only).
+        mask: (batch, 1, 256, 256) or (batch, 256, 256) foreground mask, 1=fg, 0=bg
+        """
+        if self._last_feature_map is None:
+            return None
+        if mask is not None:
+            # Resize mask to match feature map spatial size if needed
+            if mask.dim() == 3:
+                mask = mask.unsqueeze(1)
+            if mask.shape[2:] != self._last_feature_map.shape[2:]:
+                mask = torch.nn.functional.interpolate(mask.float(), size=self._last_feature_map.shape[2:], mode='nearest')
+            return self._last_feature_map * mask
+        return self._last_feature_map
+
     def _block(self, in_channels, out_channels):
         return nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False),
@@ -37,10 +56,11 @@ class ResidualDenoiser(nn.Module):
         )
 
     def forward(self, x):
-        # x: noisy image
+        # x: noisy image, shape (batch, 3, 256, 256)
         enc1 = self.encoder1(x)
         enc2 = self.encoder2(self.pool1(enc1))
         bottleneck = self.bottleneck(self.pool2(enc2))
+        self._last_feature_map = bottleneck.detach()  # Save for feature extraction
         dec1 = self.upconv1(bottleneck)
         dec1 = torch.cat((dec1, enc2), dim=1)
         dec1 = self.decoder1(dec1)

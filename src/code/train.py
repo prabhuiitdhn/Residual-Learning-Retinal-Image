@@ -13,7 +13,7 @@ val_noisy_folder      = r"D:\Hello\Residual_learning_Retina_Image\src\dataset\va
 checkpoint_path = r"D:\Hello\Residual_learning_Retina_Image\src\checkpoints"
 
 # Dataset setup
-img_size = (180, 180)
+img_size = (256, 256)
 train_dataset = PairedImageDataset(train_original_folder, train_noisy_folder, img_size=img_size)
 val_dataset   = PairedImageDataset(val_original_folder, val_noisy_folder, img_size=img_size)
 

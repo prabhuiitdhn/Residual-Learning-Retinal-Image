@@ -65,6 +65,7 @@ class Trainer:
         epoch_dir = os.path.join(self.save_dir, f'feature_maps_epoch_{epoch+1}')
         os.makedirs(epoch_dir, exist_ok=True)
         # Get all modules (layers) in the model
+        layer_idx = 0
         for name, module in self.model.named_modules():
             if name == "" or isinstance(module, torch.nn.Sequential):
                 continue  # skip top-level and Sequential containers
@@ -82,9 +83,34 @@ class Trainer:
                             img = (img * 255).astype(np.uint8)
                             img_rgb = np.stack([img]*3, axis=-1)  # grayscale to RGB
                             img_pil = Image.fromarray(img_rgb)
-                            img_pil.save(os.path.join(epoch_dir, f'bs_{b}_ch{c}_{name}.png'))
+                            img_pil.save(os.path.join(epoch_dir, f'bs{str(b)}_ch{str(c)}_layer{str(layer_idx)}_{name}.png'))
+                layer_idx += 1
             except Exception:
                 continue  # skip layers that can't be called directly
+
+    def save_bottleneck_features(self, features, mask, epoch, batch_idx, split="train"):
+        """
+        Save bottleneck features for foreground only (using mask) as .npy file and as images (one per channel).
+        """
+        import matplotlib.pyplot as plt
+        if mask.dim() == 3:
+            mask = mask.unsqueeze(1)
+        if mask.shape[2:] != features.shape[2:]:
+            mask = torch.nn.functional.interpolate(mask.float(), size=features.shape[2:], mode='nearest')
+        fg_features = (features * mask).cpu().numpy()
+        save_dir = os.path.join(self.save_dir, f"features_{split}")
+        os.makedirs(save_dir, exist_ok=True)
+        # Save as .npy
+        np.save(os.path.join(save_dir, f"epoch{epoch+1}_batch{batch_idx+1}_fg_features.npy"), fg_features)
+        # Save each channel as an image (normalize to 0-255)
+        for b in range(fg_features.shape[0]):
+            for c in range(fg_features.shape[1]):
+                fmap = fg_features[b, c]
+                if np.all(fmap == 0):
+                    continue  # skip empty
+                fmap_norm = (fmap - fmap.min()) / (fmap.max() - fmap.min() + 1e-8)
+                fmap_img = (fmap_norm * 255).astype(np.uint8)
+                plt.imsave(os.path.join(save_dir, f"epoch{epoch+1}_batch{batch_idx+1}_b{b}_ch{c}_fg.png"), fmap_img, cmap='gray')
 
     def train(self, patience=10):
         best_val_loss = float('inf')
@@ -96,20 +122,28 @@ class Trainer:
             start_time = time.time()
             self.model.train()
             epoch_loss, epoch_acc = 0, 0
-            for batch_idx, (noisy, original) in enumerate(self.train_loader):
+            for batch_idx, (noisy, original, mask) in enumerate(self.train_loader):
                 noisy = noisy.to(self.device)
                 original = original.to(self.device)
+                mask = mask.to(self.device)
                 self.optimizer.zero_grad()
                 if (batch_idx % 50) == 0:
                     self.extract_and_save_all_feature_maps(noisy, epoch)
                 out = self.model(noisy)
-                mse_loss = self.criterion(out, original)
+                # Save bottleneck feature space for foreground only
+                bottleneck_features = self.model.get_last_feature_map(mask)
+                if (batch_idx % 50) == 0:
+                    self.save_bottleneck_features(bottleneck_features, mask, epoch, batch_idx, split="train")
+                # Compute pixel-wise loss and mask out background
+                mse_pixel = (out - original) ** 2
+                mse_pixel = mse_pixel.mean(dim=1)  # mean over channels, shape (B, H, W)
+                masked_mse = (mse_pixel * mask).sum() / (mask.sum() + 1e-8)
                 # SSIM loss (if available)
                 if _ssim is not None:
                     ssim_loss = 1 - _ssim(out, original, data_range=1.0, size_average=True)
-                    loss = mse_loss + ssim_loss
+                    loss = masked_mse + ssim_loss
                 else:
-                    loss = mse_loss
+                    loss = masked_mse
                 # Elastic Net regularization
                 l1_penalty = sum(param.abs().sum() for param in self.model.parameters())
                 l2_penalty = sum((param ** 2).sum() for param in self.model.parameters())
@@ -128,11 +162,18 @@ class Trainer:
             self.model.eval()
             with torch.no_grad():
                 val_loss, val_acc = 0, 0
-                for noisy, original in self.val_loader:
+                for batch_idx, (noisy, original, mask) in enumerate(self.val_loader):
                     noisy = noisy.to(self.device)
                     original = original.to(self.device)
+                    mask = mask.to(self.device)
                     outv = self.model(noisy)
-                    val_loss += self.criterion(outv, original).item() * noisy.size(0)
+                    # Save bottleneck feature space for foreground only (validation)
+                    bottleneck_features = self.model.get_last_feature_map(mask)
+                    self.save_bottleneck_features(bottleneck_features, mask, epoch, batch_idx, split="val")
+                    mse_pixel = (outv - original) ** 2
+                    mse_pixel = mse_pixel.mean(dim=1)
+                    masked_mse = (mse_pixel * mask).sum() / (mask.sum() + 1e-8)
+                    val_loss += masked_mse.item() * noisy.size(0)
                     val_acc += self.accuracy_fn(outv, original) * noisy.size(0)
                 val_loss /= len(self.val_loader.dataset)
                 val_acc /= len(self.val_loader.dataset)
