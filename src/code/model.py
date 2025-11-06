@@ -7,7 +7,7 @@ class ResidualDenoiser(nn.Module):
     Input: (batch_size, 3, H, W) - noisy image
     Output: (batch_size, 3, H, W) - denoised image (should match original)
     """
-    def __init__(self, in_channels=3, out_channels=3, features=[32, 64, 128]):
+    def __init__(self, in_channels=3, out_channels=3, features=[64, 128, 256]):
         super(ResidualDenoiser, self).__init__()
 
         # Encoder
@@ -25,15 +25,15 @@ class ResidualDenoiser(nn.Module):
         self.upconv2 = nn.ConvTranspose2d(features[1], features[0], kernel_size=2, stride=2)
         self.decoder2 = self._block(features[0]*2, features[0])
 
-    # Final output layer
-    self.final_conv = nn.Conv2d(features[0], out_channels, kernel_size=1)
-    self.output_activation = nn.Sigmoid()
+        # Final output layer
+        self.final_conv = nn.Conv2d(features[0], out_channels, kernel_size=1)
+        self.output_activation = nn.Sigmoid()
 
     def _block(self, in_channels, out_channels):
         return nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True)
+            nn.ELU(inplace=True)
         )
 
     def forward(self, x):

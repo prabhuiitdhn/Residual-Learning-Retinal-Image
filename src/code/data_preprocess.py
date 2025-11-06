@@ -13,7 +13,6 @@ def advanced_augmentations():
         transforms.RandomRotation(degrees=45),
         transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1),
         transforms.RandomResizedCrop(size=(180, 180), scale=(0.8, 1.0)),
-        transforms.GaussianBlur(kernel_size=(5, 9), sigma=(0.1, 5)),
     ])
 
 def augment_and_save_images(src_folder, save_folder, augmentations_per_image=10):
@@ -62,9 +61,9 @@ def add_random_noise_to_folder(src_folder, save_folder, noise_sigma=0.05, img_si
     print(f"Noisy images saved to {save_folder}")
 
 if __name__ == "__main__":
-    src_folder = r"D:\Hello\image\dataset\testing\original"
-    augmented_save_folder = r"D:\Hello\image\dataset\testing\augmented"
-    noise_save_folder = r"D:\Hello\image\dataset\testing\noisy"
+    # src_folder = r"D:\Hello\Residual_learning_Retina_Image\src\dataset\testing\original"
+    augmented_save_folder = r"D:\Hello\images\validation\original"
+    noise_save_folder = r"D:\Hello\images\validation\noisy"
 
-    augment_and_save_images(src_folder, augmented_save_folder, augmentations_per_image=10)
-    add_random_noise_to_folder(augmented_save_folder, noise_save_folder, noise_sigma=0.05, img_size=(180, 180))
+    # augment_and_save_images(src_folder, augmented_save_folder, augmentations_per_image=10)
+    add_random_noise_to_folder(augmented_save_folder, noise_save_folder, noise_sigma=0.005, img_size=(180, 180))

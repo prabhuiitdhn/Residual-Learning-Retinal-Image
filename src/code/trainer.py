@@ -5,9 +5,9 @@ import torch.optim as optim
 from torch.optim.lr_scheduler import ExponentialLR
 from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
-
+from pytorch_msssim import ssim as _ssim  # Ensure pytorch_msssim is installed
 class Trainer:
-    def __init__(self, model, train_dataset, val_dataset, device=None, batch_size=32, lr=1e-3, epochs=50, save_dir="results"):
+    def __init__(self, model, train_dataset, val_dataset, device=None, batch_size=32, lr=1e-3, epochs=50, save_dir="results", l1_lambda=1e-6, l2_lambda=1e-4):
         self.model = model
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model.to(self.device)
@@ -15,14 +15,17 @@ class Trainer:
         self.val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
         self.epochs = epochs
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
-        self.scheduler = ExponentialLR(self.optimizer, gamma=0.95)
+        self.scheduler = ExponentialLR(self.optimizer, gamma=0.25)
         self.criterion = torch.nn.MSELoss()
+        
         self.save_dir = save_dir
         os.makedirs(self.save_dir, exist_ok=True)
         self.train_losses = []
         self.val_losses = []
         self.train_accs = []
         self.val_accs = []
+        self.l1_lambda = l1_lambda
+        self.l2_lambda = l2_lambda
 
     def accuracy_fn(self, pred, target):
         mse = ((pred - target) ** 2).mean().item()
@@ -73,13 +76,13 @@ class Trainer:
                     # fmap shape: (batch, channels, H, W)
                     batch_size, channels, H, W = fmap.shape
                     for b in range(min(1, batch_size)):
-                        for c in range(min(3, channels)):
+                        for c in range(0, channels, 2):
                             img = fmap[b, c]
                             img = (img - img.min()) / (img.max() - img.min() + 1e-8)  # normalize to [0,1]
                             img = (img * 255).astype(np.uint8)
                             img_rgb = np.stack([img]*3, axis=-1)  # grayscale to RGB
                             img_pil = Image.fromarray(img_rgb)
-                            img_pil.save(os.path.join(epoch_dir, f'{name}_b{b}_c{c}.png'))
+                            img_pil.save(os.path.join(epoch_dir, f'bs_{b}_ch{c}_{name}.png'))
             except Exception:
                 continue  # skip layers that can't be called directly
 
@@ -88,17 +91,29 @@ class Trainer:
         best_epoch = 0
         patience_counter = 0
         best_model_path = os.path.join(self.save_dir, "best_model.pt")
+        import time
         for epoch in range(self.epochs):
+            start_time = time.time()
             self.model.train()
             epoch_loss, epoch_acc = 0, 0
             for batch_idx, (noisy, original) in enumerate(self.train_loader):
                 noisy = noisy.to(self.device)
                 original = original.to(self.device)
                 self.optimizer.zero_grad()
-                if batch_idx == 0:
+                if (batch_idx % 50) == 0:
                     self.extract_and_save_all_feature_maps(noisy, epoch)
                 out = self.model(noisy)
-                loss = self.criterion(out, original)
+                mse_loss = self.criterion(out, original)
+                # SSIM loss (if available)
+                if _ssim is not None:
+                    ssim_loss = 1 - _ssim(out, original, data_range=1.0, size_average=True)
+                    loss = mse_loss + ssim_loss
+                else:
+                    loss = mse_loss
+                # Elastic Net regularization
+                l1_penalty = sum(param.abs().sum() for param in self.model.parameters())
+                l2_penalty = sum((param ** 2).sum() for param in self.model.parameters())
+                loss = loss + self.l1_lambda * l1_penalty + self.l2_lambda * l2_penalty
                 loss.backward()
                 self.optimizer.step()
                 epoch_loss += loss.item() * noisy.size(0)
@@ -107,6 +122,7 @@ class Trainer:
             epoch_acc /= len(self.train_loader.dataset)
             self.train_losses.append(epoch_loss)
             self.train_accs.append(epoch_acc)
+            epoch_time = time.time() - start_time
 
             # Validation
             self.model.eval()
@@ -123,7 +139,7 @@ class Trainer:
                 self.val_losses.append(val_loss)
                 self.val_accs.append(val_acc)
             self.scheduler.step()
-            print(f"Epoch {epoch+1}/{self.epochs} - Train Loss: {epoch_loss:.4f} - Val Loss: {val_loss:.4f} - Train Acc: {epoch_acc:.4f} - Val Acc: {val_acc:.4f}")
+            print(f"Epoch {epoch+1}/{self.epochs} | Time: {epoch_time:.2f}s | Train Loss: {epoch_loss:.4f} | Val Loss: {val_loss:.4f} | Train Acc: {epoch_acc:.4f} | Val Acc: {val_acc:.4f}")
 
             # Early stopping and best model saving
             if val_loss < best_val_loss:
@@ -137,6 +153,6 @@ class Trainer:
                     print(f"Early stopping at epoch {epoch+1}. Best epoch: {best_epoch+1} (val_loss={best_val_loss:.4f})")
                     break
 
-        torch.save(self.model.state_dict(), os.path.join(self.save_dir, "residual_denoiser_final.pt"))
+        # torch.save(self.model.state_dict(), os.path.join(self.save_dir, "residual_denoiser_final.pt"))
         self.save_curves()
         print(f"Model and results saved to {self.save_dir}. Best model: {best_model_path}")

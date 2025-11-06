@@ -36,7 +36,7 @@ test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=1, shuffle=Fa
 # Load trained model
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = ResidualDenoiser()
-model.load_state_dict(torch.load(os.path.join(checkpoint_path, "residual_denoiser_final.pt"), map_location=device))
+model.load_state_dict(torch.load(os.path.join(checkpoint_path, "best_model.pt"), map_location=device))
 model.to(device)
 model.eval()
 
