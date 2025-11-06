@@ -83,7 +83,11 @@ class Trainer:
             except Exception:
                 continue  # skip layers that can't be called directly
 
-    def train(self):
+    def train(self, patience=10):
+        best_val_loss = float('inf')
+        best_epoch = 0
+        patience_counter = 0
+        best_model_path = os.path.join(self.save_dir, "best_model.pt")
         for epoch in range(self.epochs):
             self.model.train()
             epoch_loss, epoch_acc = 0, 0
@@ -94,11 +98,11 @@ class Trainer:
                 if batch_idx == 0:
                     self.extract_and_save_all_feature_maps(noisy, epoch)
                 out = self.model(noisy)
-                loss = self.criterion(out, noisy - original)
+                loss = self.criterion(out, original)
                 loss.backward()
                 self.optimizer.step()
                 epoch_loss += loss.item() * noisy.size(0)
-                epoch_acc += self.accuracy_fn(out, noisy - original) * noisy.size(0)
+                epoch_acc += self.accuracy_fn(out, original) * noisy.size(0)
             epoch_loss /= len(self.train_loader.dataset)
             epoch_acc /= len(self.train_loader.dataset)
             self.train_losses.append(epoch_loss)
@@ -112,8 +116,8 @@ class Trainer:
                     noisy = noisy.to(self.device)
                     original = original.to(self.device)
                     outv = self.model(noisy)
-                    val_loss += self.criterion(outv, noisy - original).item() * noisy.size(0)
-                    val_acc += self.accuracy_fn(outv, noisy - original) * noisy.size(0)
+                    val_loss += self.criterion(outv, original).item() * noisy.size(0)
+                    val_acc += self.accuracy_fn(outv, original) * noisy.size(0)
                 val_loss /= len(self.val_loader.dataset)
                 val_acc /= len(self.val_loader.dataset)
                 self.val_losses.append(val_loss)
@@ -121,7 +125,18 @@ class Trainer:
             self.scheduler.step()
             print(f"Epoch {epoch+1}/{self.epochs} - Train Loss: {epoch_loss:.4f} - Val Loss: {val_loss:.4f} - Train Acc: {epoch_acc:.4f} - Val Acc: {val_acc:.4f}")
 
+            # Early stopping and best model saving
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                best_epoch = epoch
+                patience_counter = 0
+                torch.save(self.model.state_dict(), best_model_path)
+            else:
+                patience_counter += 1
+                if patience_counter >= patience:
+                    print(f"Early stopping at epoch {epoch+1}. Best epoch: {best_epoch+1} (val_loss={best_val_loss:.4f})")
+                    break
 
         torch.save(self.model.state_dict(), os.path.join(self.save_dir, "residual_denoiser_final.pt"))
         self.save_curves()
-        print(f"✅ Model and results saved to {self.save_dir}")
+        print(f"Model and results saved to {self.save_dir}. Best model: {best_model_path}")

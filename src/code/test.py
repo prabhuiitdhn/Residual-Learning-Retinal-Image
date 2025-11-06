@@ -1,7 +1,6 @@
 import os
 import torch
 from model import ResidualDenoiser
-from dataset import PairedImageDataset
 import numpy as np
 from PIL import Image
 import cv2
@@ -10,6 +9,7 @@ import cv2
 test_noisy_folder    = r"D:\Hello\Residual_learning_Retina_Image\src\dataset\testing\noisy"
 checkpoint_path = r"D:\Hello\Residual_learning_Retina_Image\src\checkpoints"
 save_results_path = r"D:\Hello\Residual_learning_Retina_Image\src\results"
+
 img_size = (180, 180)
 
 # Load test dataset (only noisy images)
@@ -46,8 +46,7 @@ os.makedirs(save_dir, exist_ok=True)
 with torch.no_grad():
     for idx, noisy in enumerate(test_loader):
         noisy = noisy.to(device)
-        residual_pred = model(noisy)
-        denoised_pred = noisy - residual_pred
+        denoised_pred = model(noisy)
         # Convert to numpy and save as image
         denoised_img = denoised_pred.squeeze().cpu().numpy()
         denoised_img = np.clip(denoised_img, 0, 1)
@@ -55,5 +54,4 @@ with torch.no_grad():
         denoised_img = np.transpose(denoised_img, (1,2,0))
         img_pil = Image.fromarray(denoised_img)
         img_pil.save(os.path.join(save_dir, f"denoised_{idx+1}.png"))
-       
 print(f"✅ Denoised test outputs saved to {save_dir}")

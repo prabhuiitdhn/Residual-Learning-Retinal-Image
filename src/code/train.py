@@ -25,9 +25,9 @@ trainer = Trainer(
     model=model,
     train_dataset=train_dataset,
     val_dataset=val_dataset,
-    batch_size=32,
-    lr=1e-3,
-    epochs=5,
+    batch_size=4,
+    lr=1e-5,
+    epochs=500,
     save_dir=checkpoint_path
 )
 

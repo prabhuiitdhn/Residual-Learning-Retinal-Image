@@ -25,8 +25,9 @@ class ResidualDenoiser(nn.Module):
         self.upconv2 = nn.ConvTranspose2d(features[1], features[0], kernel_size=2, stride=2)
         self.decoder2 = self._block(features[0]*2, features[0])
 
-        # Final output layer
-        self.final_conv = nn.Conv2d(features[0], out_channels, kernel_size=1)
+    # Final output layer
+    self.final_conv = nn.Conv2d(features[0], out_channels, kernel_size=1)
+    self.output_activation = nn.Sigmoid()
 
     def _block(self, in_channels, out_channels):
         return nn.Sequential(
@@ -47,4 +48,5 @@ class ResidualDenoiser(nn.Module):
         dec2 = torch.cat((dec2, enc1), dim=1)
         dec2 = self.decoder2(dec2)
         out = self.final_conv(dec2)
-        return out  # denoised image
+        out = self.output_activation(out)
+        return out  # denoised image in [0,1]
